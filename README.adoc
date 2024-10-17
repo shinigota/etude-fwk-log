@@ -1,0 +1,546 @@
+= FWK de log
+Benjamin BARBE <bebarbe@sqli.com>
+V0.1, 09/03/2022
+
+:doctype: book
+
+:toc:
+
+== Introduction
+
+La faille de décembre 2021 https://nvd.nist.gov/vuln/detail/CVE-2021-44228[log4shell] a remis en cause la fiabilité des différents frameworks de logging et a laissé place à de nombreuses questions :
+
+* Pourquoi y-a-t'il autant de frameworks de logging ?
+* Lequel des frameworks est le plus fiable ?
+* Lequel est le plus pertinent en terme de fonctionnalité ?
+* Lequel est le plus simple à mettre à jour ?
+* Lequel est le plus simple à utiliser ?
+* Lequel est le plus optimisé ?
+
+
+Cette étude vise à faire un tour sur l'historique des frameworks de logs afin de répondre aux questions ci-dessus et aider à choisir une bonne solution de logging selon les besoins des projets.
+
+== Historique des frameworks de logging
+
+Les frameworks de logs sont scindés en deux catégories.
+
+. Les implémentations, effectuant le logging
+. Les API, permettant d'ajouter une couche d'abstraction et choisir l'implémentation utilisée
+
+=== Implémentations
+En 1996, la release JDK 1.0 est disponible au grand public. Cette version du JDK ne comprenant pas d'outil de logging, le besoin de logguer se manifeste rapidement.
+
+Par conséquent, chaque développeur met en place sa propre solution propriétaire, avant que des frameworks open source voient le jour.
+
+https://logging.apache.org/log4j/1.2/[1996 / 1999 Log4j]:: En 1996, dans le cadre de son projet de commerce sécurisé pour l'europe, EU SEMPER (Secure Electronic Marketplace for Europe) met en place son propre framework de log, qui est publié en 1999 sous le nom Log4j
+https://tomcat.apache.org/tomcat-8.0-doc/logging.html#Servlets_logging_API[1999 Jakarta / Tomcat]:: Le projet Jakarta (Tomcat) https://lists.apache.org/thread/53otcqljjfnvjs3hv8m4ldzlgz59yk6k[est créé]. Cette première version de Tomcat contient son propre logger, qui d'ailleurs existe toujours et est utilisé pour les servlets.
+https://docs.oracle.com/javase/7/docs/api/java/util/logging/package-summary.html[1999 / 2002 java.util.logging]:: Pour répondre au besoin de logging, des JSR (demandes de features Java) sont ouvertes. +
+La https://jcp.org/en/jsr/detail?id=47[JSR-41] est ouverte en 1999. Elle donnera lieu à la première version du logging natif java en 2002, dans le JDK 1.4
+https://logback.qos.ch/[2006 / 2011 : Logback]:: En 2006, le créateur de log4j, Ceki Gülcü, fonde la société https://www.qos.ch/[QOS] et débute le développement de logback, jusqu'en 2011 où le framework sortira des versions alpha / beta pour une première release en V1. +
+Il s'agit du successeur spirituel de Log4j 1, visant à améliorer les points suivants :
+** Fiabilité accrue (couverture de test bien plus importante que log4j)
+** Réécriture du moteur pour améliorer les performances
+https://logging.apache.org/log4j/2.x/[2014 Log4j 2]:: Log4j 1 basé sur des anciennes versions de java, devient une contrainte à la maintenance. Apache passe Log4j 1 EOL et débute le développement de Log4j 2, en mettant l'accent sur des performances bien supérieures et un framework plus riche en fonctionnalités (système de plugin, reconfiguration à chaud, loggers asynchrone)
+
+
+=== API / Facades
+
+Après la sortie des premiers frameworks de logging, l'écosystème reste très hétérogène.
+
+Les applications et librairies continuent d'utiliser des solutions de logging variées nécessitant des configurations totalement différentes. Maintenir des applications Java peut être très compliqué.
+
+La solution d'une API de logging doit vite s'imposer.
+
+https://commons.apache.org/proper/commons-logging/[2002-02 Jakarta Commons Logging (JCL - aujourd'hui Apache Commons Logging)]:: 
+JCL est la première facade de logging et s'impose vite avec son principe de fonctionnement automatique : +
+Au lancement de l'application, JCL scan le classpath pour découvrir automatiquement la librairie de logging d'implémentation utilisée. +
+Les développeurs peuvent alors utiliser n'importe quelle implémentation avec un minimum d'effets de bord, pourvu qu'ils utilisent les interfaces JCL pour logguer.
+https://www.slf4j.org/[2005 SLF4J]:: Le méchanisme de découverte automatique de librairie de logging de JCL était très complexe et avait tendance à provoquer des fuites mémoires et des erreurs critiques silencieuses au lancement des applications, si les librairies d'implémentations étaient manquantes. +
+Ceki Gülcü met en place SLF4J comme alternative à JCL. +
+Au lieu de reposer sur un mécanisme de découverte du classpath, SLF4J utilise des bridges à inclure dans le projet :
+** jcl-over-slf4j
+** slf4j-jcl
+** log4j-over-slf4j
+** jul-to-slf4j
+** slf4j-jdk-platform-logging
+** slf4j-reload4j
+** Log4j to SLF4J Adapter
+** ...
+
+Les bridges sont souvent disponibles dans les deux sens. Par exemple un bridge renvoyant les appels de SLF4J vers l'implémetation Log4j, et un bridge alternatif renvoyant les appels Log4j vers SLF4J si besoin de rediriger vers une autre implémentation. +
+Logback, qui arrivera l'année d'après, est une implémentation native de SLF4J.
+
+https://www.slf4j.org/faq.html#changesInVersion200[SLF4J 2] est en cours de développement. La nouvelle release majeur est prévue pour être rétrocompatible. Elle proposera https://www.slf4j.org/faq.html#changesInVersion200[un méchanisme de bridges amélioré] (ServiceLoader natif Java) et la possibiliter de logguer en https://www.slf4j.org/manual.html#fluent[fluent]
+
+https://logging.apache.org/log4j/2.x/log4j-api/[2014 Log4j-api]:: Log4j 2 n'est plus publié en un package comme l'était Log4j 1. +
+Apache décide de scinder Log4j 2 en deux modules :  log4j-core et donc log4j-api fonctionnant sur le même principe que SLF4J. +
+Log4j 2 propose aussi des bridges :
+** Log4j 1.2 bridge
+** Log4j 2 SLF4J Binding
+** Log4j JDK Logging Adapter (java.util.logging)
+** Log4j 2 JDK Platform Logging Adapter (system.logger)
+
+https://docs.oracle.com/javase/9/docs/api/java/lang/System.Logger.html[2017 JDK 9 system logger]:: Beaucoup plus tardivement, et après avoir déployé java.util.logging dans le JDK 1.4, Oracle déploie system.logger se présentant comme l'API de logging native, à partir du JDK 9 +
+_Quelques liens intéressants sur system.logger qui est assez méconnu https://www.reddit.com/r/java/comments/s5bomf/replacing_logging_apis_with_javalangsystemlogger/[1] https://blog.frankel.ch/system-logger/[2]_
+
+
+https://github.com/google/flogger[2018 flogger]::
+On notera aussi flogger, développé par Google et proposant une approche fluent. La pre-release 0.1 est sortie en 2018.
+
+== Avant de continuer
+
+Log4j 1 est encore aujourd'hui très utilisé, mais puisque la dépendance est EOL et la migration vers Log4j 2 est fortement conseillée, on ignorera Log4j 1.
+
+== Comparaison des appenders
+Les appenders commnus qu'on retrouve entre les trois implémentations sont les suivants :
+
+.Appenders principaux
+|===
+|	*Log4j2*	|	*Logback*	| *java.util.logging*
+|	ConsoleAppender	|	ConsoleAppender	|	ConsoleHandler
+|	FileAppender	|	FileAppender	|	FileHandler
+|	OutputStreamAppender	|	OutputStreamAppender	|	StreamHandler
+|	SocketAppender	|	ServerSocketAppender +
+SSLServerSocketAppender +
+AbstractServerSocketAppender +
+AbstractSocketAppender		|	SocketHandler +
+AbstractSSLSocketAppender
+|	**Paramétrage d’appender**	|	CyclicBufferAppender	|	MemoryHandler
+|	RollingFileAppender	|	RollingFileAppender	|	
+|	VectorAppender	|	ListAppender	|	
+|	AsyncAppender +
+AsyncLogger |	AsyncAppender	|	
+|	SmtpAppender	|	SMTPAppender	|	
+|	RoutingAppender	|	SiftingAppender	|	
+|	SyslogAppender	|	SyslogAppender	|	
+|	NullAppender	|	NOPAppender	|	
+|	JdbcAppender	|	https://jira.qos.ch/browse/LOGBACK-1591[**DbAppender supprimé en 1.2.9**]	|	
+|===
+
+On remarque que java.util.logging propose peu de loggers, il n'y a pas d'équivalent natif au RollingFileAppender. +
+Attention cependant, le FileHandler permet tout de même une rotation très basique, basée sur la taille des fichiers (ce qui suffit dans la plupart des cas). +
+Quant à Logback, on peut lui repprocher de ne plus avoir d'appender de base de données.
+
+Log4j est, par contre, beaucoup plus fourni avec les appenders suivants :
+
+.Appenders supplémentaires Log4j 2
+|===
+|	JpaAppender	| NoSqlAppender | WriterAppender | FlumeAppender
+|	DemoAppender	|	RandomAccessFileAppender	|	RollingRandomAccessFileAppender	|	CassandraAppender	
+|	ServletAppender	|	CountingNoOpAppender	|	AbstractOutputStreamAppender	 | MemoryMappedFileAppender	
+|	AbstractDatabaseAppender	|	JmsAppender	|	KafkaAppender	|	JeroMqAppender	
+|	RewriteAppender	|	AbstractFileAppender	|	FailoverAppender	|	AbstractWriterAppender	
+|	HttpAppender | | | 
+
+|===
+
+== Fonctionnalités
+
+=== MDC (Mapped Diagnostic Context) / Thread Context
+Le MDC permet d'envoyer des propriétés au logger afin de différencier les logs plus facilement :
+
+* ID utilisateur
+* ID session http
+* ID objet métier
+
+Il se présente sous la forme d'un dictionnaire (d'où le **Mapped** Diagnostic Context) et a une portée statique :
+
+Les propriétés passées au logger sont disponibles dans toutes les méthodes exécutées en suivant, tant que le MDC n'est pas vidé.
+
+==== Logback : MDC
+
+.MDC logback
+[source, java]
+----
+package chapters.mdc;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
+
+import ch.qos.logback.classic.PatternLayout;
+import ch.qos.logback.core.ConsoleAppender;
+
+public class SimpleMDC {
+  static public void main(String[] args) throws Exception {
+
+    // You can put values in the MDC at any time. Before anything else
+    // we put the first name
+    MDC.put("first", "Dorothy");
+
+    [ SNIP ]
+    
+    Logger logger = LoggerFactory.getLogger(SimpleMDC.class);
+    // We now put the last name
+    MDC.put("last", "Parker");
+
+    // The most beautiful two words in the English language according
+    // to Dorothy Parker:
+    logger.info("Check enclosed.");
+    logger.debug("The most beautiful two words in English.");
+
+    MDC.put("first", "Richard");
+    MDC.put("last", "Nixon");
+    logger.info("I am not a crook.");
+    logger.info("Attributed to the former US president. 17 Nov 1973.");
+
+    MDC.remove("first");
+    MDC.remove("last");
+  }
+
+  [ SNIP ]
+
+}
+----
+.Configuration appender
+[source, xml]
+----
+<appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender"> 
+  <layout>
+    <Pattern>%X{first} %X{last} - %m%n</Pattern>
+  </layout> 
+</appender>
+----
+
+.Résultat logs
+[source, txt]
+----
+Dorothy Parker - Check enclosed.
+Dorothy Parker - The most beautiful two words in English.
+Richard Nixon - I am not a crook.
+Richard Nixon - Attributed to the former US president. 17 Nov 1973.
+----
+
+==== Log4j2 : Thread Context
+Le Thread Context chez Log4j 2 est le cumul du MDC (Mapped Diagnostic Context / Thread Context **Map**), NDC (Nested Diagnostic Context / Thread Context **Stack**).
+
+On peut aussi appeler ces fonctionnalités le "fish tagging".
+
+==== Thread Context Map / MDC
+La version la plus répandue consistant à utiliser une Map, comme pour logback.
+
+.MDC log4j2
+[source, java]
+----
+    ThreadContext.put("id", UUID.randomUUID().toString()); // Add the fishtag;
+    ThreadContext.put("ipAddress", request.getRemoteAddr());
+    ThreadContext.put("loginId", session.getAttribute("loginId"));
+    ThreadContext.put("hostName", request.getServerName());
+    
+    logger.debug("Message 1");
+    
+    
+    logger.debug("Message 2");
+    
+    
+    ThreadContext.clear();
+----
+
+.Configuration appender
+[source, xml]
+----
+<Appenders>
+    <Console name="STDOUT">
+        <PatternLayout pattern="%X{id} %X{ipAddress} %X{loginId} %X{hostName} - %m%n" />
+    </Console>
+</Appenders>
+----
+
+.Résultat logs
+[source, txt]
+----
+1b7b251df1244e8db46a45c186aada2b 127.0.0.1 monLogin SERVER-APPLICATIF - Message 1
+1b7b251df1244e8db46a45c186aada2b 127.0.0.1 monLogin SERVER-APPLICATIF - Message 2
+----
+
+==== Thread Context Stack / NDC
+Cette version est moins répandue, on utilise une stack à laquelle on veut ajouter et supprimer des valeurs, au fur et à mesure.
+
+Le NDC est particulièrement utile si on veut injecter une seule valeur dans le context, ou si on a une arborescence ou un fil d'ariane à logguer :
+
+  [Date] id_utilisateur [MSG_LOG]
+
+
+  [Date] id_session domaine_métier_1 sous_domaine_métier id_objet_métier [MSG_LOG]
+
+
+.NDC log4j2
+[source, java]
+----
+    ThreadContext.push(UUID.randomUUID().toString()); // Add the fishtag;
+     
+    logger.debug("Message 1");
+
+    //...
+
+    logger.debug("Message 2");
+    
+    //...
+
+    ThreadContext.pop();
+----
+
+.Configuration appender
+[source, java]
+----
+<Appenders>
+    <Console name="STDOUT">
+        <PatternLayout pattern="%x - %m%n" />
+    </Console>
+</Appenders>
+----
+
+.Résultat logs
+[source, txt]
+----
+1b7b251df1244e8db46a45c186aada2b - Message 1
+1b7b251df1244e8db46a45c186aada2b - Message 2
+
+USER_1 - Connexion
+USER_1 AVION F-AE87 MOTEUR X - Inspection
+USER_1 AVION F-AE87 MOTEUR X - Démontage
+USER_1 AVION F-AE87 - Inspection
+----
+
+==== Closeable Thread Context
+Le Closeable Thread Context reprend les principes ci-dessus mais a l'avantage de se purger automatiquement, puisqu'il s'utilise dans un try-with-resources (il implémente la l'interface Closeable).
+
+.Closeable MDC log4j2
+[source, java]
+----
+
+
+    // Add to the ThreadContext map for this try block only;
+    try (final CloseableThreadContext.Instance ctc
+            = CloseableThreadContext.put("id", UUID.randomUUID().toString())
+                    .put("loginId", session.getAttribute("loginId"))) {
+     
+        logger.debug("Message 1");
+
+        logger.debug("Message 2");
+    }
+----
+
+
+.Closeable NDC log4j2
+[source, java]
+----
+
+    try (final CloseableThreadContext.Instance ctc
+            = CloseableThreadContext.push(UUID.randomUUID().toString())) {
+     
+        logger.debug("Message 1");
+    
+        logger.debug("Message 2");
+    }
+----
+
+==== java.util.logging
+
+java.util.logging ne supporte ni le MDC, ni le NDC.
+
+== Le logging asynchrone
+
+Une fonctionnalité phare des frameworks de logging est le logging asynchrone.
+
+En effet logguer mobilise des ressources et peut avoir un impact important pour de nombreuses raisons :
+
+* L'application log beaucoup
+* Des patterns de convertion complexes sont utilisés
+* Des appenders qui nécessitent des accès disque
+* Des appenders qui nécessitent des accès réseau (SocketAppender, JdbcAppender, ...)
+* Les appenders base de données affectés par les performances de la BDD, les temps de transaction et possibles locks
+
+La solution de logging asynchrone peut alors rapidement se montrer avantageuse
+
+==== https://logback.qos.ch/manual/appenders.html#AsyncAppender[Logback AsyncAppender]
+
+===== Configuration appenders
+L'utilisation de l'async sur logback est très simple et passe simplement par un AsyncAppender qui est une solution native et qui encapsule un autre appender :
+
+.Configuration appender
+[source, xml]
+----
+
+  <appender name="FILE" class="FileAppender">
+    <file>myapp.log</file>
+    <encoder class="PatternLayoutEncoder">
+      <pattern>%logger{35} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <appender name="ASYNC" class="AsyncAppender">
+    <appender-ref ref="FILE"/>
+    <!-- les paramètres suivant sont faculatifs-->
+    <queueSize>1000</queueSize>
+    <discardingThreshold>0</discardingThreshold>
+    <neverBlock>true</neverBlock>
+  </appender>
+
+  <root level="DEBUG">
+    <appender-ref ref="ASYNC"/>
+  </root>
+</configuration>
+----
+
+===== Paramétrage d'optimisation
+
+Les évenements de log sont stockés dans une file de taille fixe, représentant les logs restants à écrire par les appenders. La taille de cette file est modifiable.
+
+A partir d'un certain seuil de remplissement de la file, logback supprime des events de log pour laisser place à d'autres messages à logguer. Ce seuil est paramétrable et désactivable.
+
+Le comportement dans le cas où la file est pleine est paramétrable : par défaut des logs sont purgés, autrement il est possible de bloquer l'appender, afin qu'il attende que de la place se libère dans la file : les logs ne sont plus perdus mais les performances sont considérablement réduites
+
+==== https://logging.apache.org/log4j/2.x/manual/async.html[Log4j 2]
+
+Log4j propose plusieurs solutions pour passer en asynchrone, et se base sur la librairie LMAX Disruptor, a ajouter au classpath.
+
+===== Migrer automatiquement en asynchrone
+
+Log4j2 propose de passer automatiquement tous les loggers en asynchrone.
+
+Il suffit de valoriser la propriété système ```log4j2.contextSelector``` à ```org.apache.logging.log4j.core.async.AsyncLoggerContextSelector``` ou ``` org.apache.logging.log4j.core.async.BasicAsyncLoggerContextSelector``` au lancement de l'appli
+
+===== Activation manuelle de l'asynchrone
+
+Log4j permet aussi de passer manuellement des loggers en asynchrone dans la configuration :
+
+* On configure les appenders comme d'habitude
+* On utlise ensuite des loggers asynchrones, ```<AsyncRoot></AsyncRoot>``` plutôt que ```<Root></Root>``` et/ou ```<AsyncLogger></AsyncLogger>``` plutôt que ```<Logger></Logger>```.
+
+
+.Configuration appender
+[source, xml]
+----
+  <Appender>
+    ...
+  </Appenders>
+  <Loggers>
+    <AsyncLogger name="com.foo.Bar" level="trace" includeLocation="true">
+      <AppenderRef ref="AppenderClassique"/>
+    </AsyncLogger>
+    <Root level="info" includeLocation="true">
+      <AppenderRef ref="AppenderClassique"/>
+    </Root>
+  </Loggers>
+----
+
+===== Paramétrage d'optimisation
+Tout comme Logback, le logging asynchrone est paramétrable au travers de propriétés système, mais aussi dans un fichier ```log4j2.component.properties```.
+
+La taille du buffer et le comportement du logger lorsqu'il est plein sont aussi paramétrables.
+
+Par défaut, log4j attendra que de la place se libère quand le buffer est plein.
+
+== Performances
+
+Plusieurs benchmarks sont disponibles, les méthodologies et les versions testées sont différentes :
+
+* https://logging.apache.org/log4j/2.x/manual/async.html
+** *log4j-2.0-beta5, disruptor-3.0.0.beta3, log4j-1.2.17, logback-1.0.10*
+** Warmup de JVM avec 200K log de 500 char
+** Warmup répété 10x avec 10s de tempo pour attendre que les buffers se vident
+** Appels de Logger.log (256 * 1024 / nb thread) fois, répété 5 fois, puis avg
+* https://logging.apache.org/log4j/2.x/performance.html
+** *log4j 1.2.17, log4j 2.6, logback 1.1.7, jul*
+* https://logback.qos.ch/performance.html
+** *log4j 1.2.17, log4j 2.14.1, log4j 1.3.0-alpha10*
+** Pattern constant
+** __Déperdition de logs désactivée__
+** Conf buffer par défaut(256 * 1024 pour log4j2, 128 pour log4j, 256 pour logback)
+* https://www.loggly.com/blog/benchmarking-java-logging-frameworks/
+** *log4j 2.8.2, logback 1.2.3 / slf4j 1.7.25, jul*
+** 1M de logs info
+** 1x en warmup JVM, 10x pour prise en comtpe résultats
+** Threads background de génération de nombre premiers pour situation "réelle"
+** Le tout répété 3x
+** Buffers augmentés à 1 000 000 pour log4j2 et logback
+** Logback lossy désactivé
+
+Globalement, il est compliqué de tirer une conclusion objective, mais on peut supposer que les performances des frameworks sont à peu près similaires et que le facteur principal est la bonne utilisation du logger (ne pas trop logguer et polluer le filesystem)
+
+
+On retiendra tout de même des points importants
+
+* Par défaut, logback *jette* des messages de log TRACE, DEBUG et INFO si la file est pleine à 80%, https://logback.qos.ch/manual/appenders.html#AsyncAppender[ce qui est paramétrable]
+* Par défaut, l'absence de paramètre `log4j2.asyncQueueFullPolicy` ordonnera à log4j 2 *d'attendre* si la file de log est pleine, pour ne pas perdre de log. +
+Si le paramètre est spécifié, log4j 2 supprimera des logs de la même manière que logback, en jettant les logs de type TARCE, DEBUG et INFO (configurable avec `log4j2.discardThreshold`) +
+https://logging.apache.org/log4j/2.0/log4j-core/apidocs/org/apache/logging/log4j/core/async/AsyncQueueFullPolicyFactory.html[Voir les paramètres]
+
+
+
+Quoi qu'il en soit, java.util.logging ne propose pas de logging asynchrone, pour une application avec un besoin de log important, il est évident qu'on se tournera vers log4j 2 ou logback pour de l'asynchrone.
+
+On notera que la réputation de java.util.logging a avoir des performances désastreuse n'est plus nécessairement d'actualité. https://jeremymanson.blogspot.com/2009/04/faster-logging-with-faster-logger.html[Des optimisations ont été faites depuis Java 7]
+
+== Documentation Support et Communauté
+
+=== Documentation
+
+Pour Log4j 2, on retrouve une https://logging.apache.org/log4j/2.x/[documentation] très complète comme tout projet apache, avec des guides, des changelogs détaillés, des guidelines, des benchmarks, des liens vers des tutoriels externes, une javadoc, etc... +
+
+Côté https://logback.qos.ch/[Logback] et https://www.slf4j.org/manual.html[SLF4J], la documentation n'est pas aussi complète que log4j mais le principal est là, changelogs, guides et javadoc.
+
+Pour java.util.logging, on se contentera d'une https://docs.oracle.com/javase/7/docs/api/java/util/logging/package-summary.html[javadoc], ou d'un https://docs.oracle.com/javase/8/docs/technotes/guides/logging/overview.html[guide Oracle] assez poussiéreux puisqu'il date de 2001.
+
+=== Communauté
+Selon https://www.qos.ch/[QOS], les statistiques d'utilisation sur mvnrepository donnent une bonne idée de la répartition des frameworks :
+
+* logback : https://mvnrepository.com/search?q=logback[22k]
+* log4j-core : https://mvnrepository.com/search?q=log4j[7k]
+
+A titre indicatif :
+
+* spring-webmvc : https://mvnrepository.com/search?q=spring-webmvc[4.5k]
+* spring-boot-starter-web : https://mvnrepository.com/search?q=spring-boot-starter-web[8.4k]
+* jackson-databind : https://mvnrepository.com/search?q=jackson-databind[21k]
+* mockito-core : https://mvnrepository.com/search?q=mockito-core[25k]
+
+Logback est bien plus présent que log4j. En comparant à d'autres frameworks largement adoptés, on constate que log4j 2 est quand même un framework largement connu et utilisé.
+
+L'écart d'utilisation favorisant logback peut s'expliquer du fait que log4j 2 est sorti bien plus tard et que les https://docs.spring.io/spring-boot/docs/2.1.18.RELEASE/reference/html/boot-features-logging.html[starters spring utilisent logback par défaut]
+
+
+On peut aussi comparer les mentions des frameworks sur Stackoverflow : 
+
+* Avec une requête type ```logback created:2021-03..2022-03```, on peut extrapoler un nombre de posts par mois, mais cela force à stackoverflow à renvoyer le plus de résultats, qui ne sont pas forcément pertinents
+* Autrement, une recherche simple (limitée à 500 résultats) remonte des résultats pertinents triés par date
+
+
+On obtient les résultats suivants : (en date du 02/03/2022)
+
+* Le post le plus ancien pour "log4j 2" : 28/05/2021 / 50 aines posts par mois
+* Pour "logback" : le post le plus ancien : 18/09/2021 / ~ 100aine posts par mois
+* Pour "java.util.logging" : 09/05/2015 / ~ 6 posts par mois
+
+On constate que les communautés pour log4j 2 et logback sont importantes, en revanche, java.util.logging semble sous utilisé.
+
+=== Support
+
+Côté support, Logback et SLF4J de QOS proposent un support commercial.
+
+java.util.logging étant inclu dans le JDK, pour une utilisation commerciale avec la license associée, le support est inclu.
+
+Log4j en revanche ne propose https://logging.apache.org/log4j/2.x/support.html[pas de support], on se tournera vers la communautée (qui est quand même moins importante que Logback).
+
+Pour ce qui est des mises à jour, Log4j, Logback et SLF4J étant des librairies, peuvent inclure des breaking changes.
+
+Pour java.util.logging, https://www.oracle.com/java/technologies/java-se-support-roadmap.html[pourvu que la version du JDK utilisée soit encore supportée], des patchs de sécurité moins impactants sont disponibles.
+
+
+== Conclusion
+
+Les solutions de logging sont arrivées assez tardivement, ce qui a laissé assez de temps pour qu'un écosystème hétérogène s'installe.
+
+Aujourd'hui, il n'y a pas de solution choisie à l'unanimité :
+
+Log4j::
+Est très complet mais sous exploité, ce qui rend le framework peut-être plus compliqué à prendre en main. Du code inutilisé reste du code à maintenir, pouvant faire l'objet de failles ou breaking changes. Log4j est intéressant pour des besoins de logging spécfique ou pour de l'asynchrone.
+Logback::
+qui a l'avantage d'avoir la communauté la plus importante, dispose aussi d'un support commercial. Le framework est plus simple à utiliser mais manque peut-être de features (le NDC, moins d'appenders, moins de granularité pour la configuration asynchrone)
+java.util.logging::
+Son principal avantage est le support commercial sur différentes versions de Java en LTS. On peut espérer des fix sans aucune breaking changes. En revanche, sans un minimum de surcharge ou d'écriture d'appenders custom, la solution native manque de features. Cependant, le FileHandler et sa rotation basique permet quand même de couvrir une grande majorité des cas d'utilisation.
+
+Pour ce qui est des API, JCL est moins présent aujourd'hui, l'API évolue beaucoup moins et son https://commons.apache.org/proper/commons-logging/guide.html#Configuration[méchanisme de configuration] est plus lourd, complexe et peut être source d'erreur.
+
+log4j-api et slf4j sont très similaires et fonctionnent sur les mêmes principes. log4j-core étant l'implémentation native de log4j-api et logback étant l'implémentation native de slf4j. En revanche, slf4j propose le même support commercial que logback. Sa communauté est aussi plus important que log4j.
